@@ -30,10 +30,14 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("role", User.Role.ADMIN)
 
         if extra_fields.get("is_staff") is not True:
-            raise ValueError("Superusuário deve possuir is_staff=True.")
+            raise ValueError(
+                "Superusuário deve possuir is_staff=True."
+            )
 
         if extra_fields.get("is_superuser") is not True:
-            raise ValueError("Superusuário deve possuir is_superuser=True.")
+            raise ValueError(
+                "Superusuário deve possuir is_superuser=True."
+            )
 
         return self.create_user(
             email=email,
@@ -86,6 +90,7 @@ class User(AbstractUser):
     )
 
     USERNAME_FIELD = "email"
+
     REQUIRED_FIELDS = [
         "first_name",
         "last_name",
