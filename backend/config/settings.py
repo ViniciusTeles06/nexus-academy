@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "accounts",
     "academics",
     "grading",
+    "attendance",
 ]
 
 MIDDLEWARE = [
@@ -184,3 +185,4 @@ AUTH_COOKIE_HTTP_ONLY = True
 AUTH_COOKIE_SECURE = not DEBUG
 AUTH_COOKIE_SAMESITE = "Lax"
 AUTH_COOKIE_PATH = "/api/v1/auth/"
+
