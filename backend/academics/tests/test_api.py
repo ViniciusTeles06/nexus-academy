@@ -333,3 +333,5 @@ class AcademicAPITests(APITestCase):
             response.data[0]["registration_number"],
             "20260001",
         )
+
+        

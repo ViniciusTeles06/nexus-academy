@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     # Local
     "accounts",
     "academics",
+    "grading",
 ]
 
 MIDDLEWARE = [
