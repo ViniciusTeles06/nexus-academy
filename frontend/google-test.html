@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Academy - Teste Google</title>
+
+    <script
+        src="https://accounts.google.com/gsi/client"
+        async
+        defer>
+    </script>
+</head>
+
+<body>
+    <h1>Nexus Academy</h1>
+    <p>Teste temporário do login com Google</p>
+
+    <div
+        id="g_id_onload"
+        data-client_id="23552119149-fcr1glujgpk99epd60euhptr2gj671qj.apps.googleusercontent.com"
+        data-callback="handleCredentialResponse"
+        data-auto_prompt="false">
+    </div>
+
+    <div
+        class="g_id_signin"
+        data-type="standard"
+        data-size="large"
+        data-theme="outline"
+        data-text="continue_with"
+        data-shape="rectangular">
+    </div>
+
+    <pre id="resultado"></pre>
+
+    <script>
+        async function handleCredentialResponse(response) {
+            const resultado = document.getElementById("resultado");
+
+            resultado.textContent = "Validando com o Nexus Academy...";
+
+            try {
+                const apiResponse = await fetch(
+                    "http://localhost:8000/api/v1/auth/google/",
+                    {
+                        method: "POST",
+                        credentials: "include",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            credential: response.credential,
+                        }),
+                    }
+                );
+
+                const data = await apiResponse.json();
+
+                if (!apiResponse.ok) {
+                    resultado.textContent =
+                        "Erro:\n" +
+                        JSON.stringify(data, null, 2);
+
+                    return;
+                }
+
+                resultado.textContent =
+                    "LOGIN REALIZADO COM SUCESSO!\n\n" +
+                    "Usuário:\n" +
+                    JSON.stringify(data.user, null, 2);
+            } catch (error) {
+                resultado.textContent =
+                    "Erro ao conectar com o backend:\n" +
+                    error.message;
+            }
+        }
+    </script>
+</body>
+</html>
