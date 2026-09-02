@@ -1,6 +1,8 @@
+import os
 from datetime import timedelta
 from pathlib import Path
 
+import dj_database_url
 import environ
 
 
@@ -45,6 +47,15 @@ ALLOWED_HOSTS = env.list(
     ],
 )
 
+render_hostname = os.environ.get(
+    "RENDER_EXTERNAL_HOSTNAME"
+)
+
+if render_hostname:
+    ALLOWED_HOSTS.append(
+        render_hostname
+    )
+
 
 # =========================================================
 # GOOGLE AUTH
@@ -88,6 +99,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+
+    "whitenoise.middleware.WhiteNoiseMiddleware",
 
     "django.contrib.sessions.middleware.SessionMiddleware",
 
@@ -155,30 +168,43 @@ WSGI_APPLICATION = "config.wsgi.application"
 # DATABASE
 # =========================================================
 
-DATABASES = {
-    "default": {
-        "ENGINE": (
-            "django.db.backends.postgresql"
-        ),
-        "NAME": env(
-            "DB_NAME"
-        ),
-        "USER": env(
-            "DB_USER"
-        ),
-        "PASSWORD": env(
-            "DB_PASSWORD"
-        ),
-        "HOST": env(
-            "DB_HOST",
-            default="localhost",
-        ),
-        "PORT": env(
-            "DB_PORT",
-            default="5432",
-        ),
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL"
+)
+
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": (
+                "django.db.backends.postgresql"
+            ),
+            "NAME": env(
+                "DB_NAME"
+            ),
+            "USER": env(
+                "DB_USER"
+            ),
+            "PASSWORD": env(
+                "DB_PASSWORD"
+            ),
+            "HOST": env(
+                "DB_HOST",
+                default="localhost",
+            ),
+            "PORT": env(
+                "DB_PORT",
+                default="5432",
+            ),
+        }
+    }
 
 
 # =========================================================
@@ -237,16 +263,24 @@ USE_TZ = True
 # STATIC FILES
 # =========================================================
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# =========================================================
-# DEFAULT PRIMARY KEY
-# =========================================================
-
-DEFAULT_AUTO_FIELD = (
-    "django.db.models.BigAutoField"
-)
+STORAGES = {
+    "default": {
+        "BACKEND": (
+            "django.core.files.storage."
+            "FileSystemStorage"
+        ),
+    },
+    "staticfiles": {
+        "BACKEND": (
+            "whitenoise.storage."
+            "CompressedManifestStaticFilesStorage"
+        ),
+    },
+}
 
 
 # =========================================================
@@ -302,7 +336,9 @@ AUTH_COOKIE_HTTP_ONLY = True
 
 AUTH_COOKIE_SECURE = not DEBUG
 
-AUTH_COOKIE_SAMESITE = "Lax"
+AUTH_COOKIE_SAMESITE = (
+    "Lax" if DEBUG else "None"
+)
 
 AUTH_COOKIE_PATH = "/api/v1/auth/"
 
@@ -311,9 +347,40 @@ AUTH_COOKIE_PATH = "/api/v1/auth/"
 # CORS
 # =========================================================
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+)
 
 CORS_ALLOW_CREDENTIALS = True
+
+
+# =========================================================
+# CSRF
+# =========================================================
+
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+)
+
+
+# =========================================================
+# PRODUCTION SECURITY
+# =========================================================
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = (
+        "HTTP_X_FORWARDED_PROTO",
+        "https",
+    )
+
+    SESSION_COOKIE_SECURE = True
+
+    CSRF_COOKIE_SECURE = True

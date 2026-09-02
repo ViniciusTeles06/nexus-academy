@@ -10,7 +10,7 @@ backend/.venv/
 
 # Django
 *.log
-db.sqlite3
+*.sqlite3
 media/
 staticfiles/
 
