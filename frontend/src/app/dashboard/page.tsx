@@ -2,65 +2,98 @@
 
 import {
   useEffect,
-  useSyncExternalStore,
+  useState,
 } from "react";
+
 import { useRouter } from "next/navigation";
 
+import {
+  apiFetch,
+  clearSession,
+  logout,
+} from "@/lib/api";
+
 type NexusUser = {
+  id: string;
   email: string;
   first_name: string;
+  last_name: string;
   full_name: string;
-  role: string;
+  role:
+    | "STUDENT"
+    | "TEACHER"
+    | "ADMIN";
+  avatar: string | null;
+  is_email_verified: boolean;
 };
-
-function subscribe() {
-  return () => {};
-}
-
-function getUserSnapshot() {
-  return sessionStorage.getItem("nexus_user");
-}
-
-function getAccessSnapshot() {
-  return sessionStorage.getItem("nexus_access");
-}
-
-function getServerSnapshot() {
-  return null;
-}
 
 export default function Dashboard() {
   const router = useRouter();
 
-  const storedUser = useSyncExternalStore(
-    subscribe,
-    getUserSnapshot,
-    getServerSnapshot,
-  );
+  const [user, setUser] =
+    useState<NexusUser | null>(null);
 
-  const access = useSyncExternalStore(
-    subscribe,
-    getAccessSnapshot,
-    getServerSnapshot,
-  );
+  const [loading, setLoading] =
+    useState(true);
 
-  let user: NexusUser | null = null;
-
-  if (storedUser) {
-    try {
-      user = JSON.parse(storedUser) as NexusUser;
-    } catch {
-      user = null;
-    }
-  }
+  const [loggingOut, setLoggingOut] =
+    useState(false);
 
   useEffect(() => {
-    if (!access || !storedUser) {
-      router.replace("/");
-    }
-  }, [access, storedUser, router]);
+    let active = true;
 
-  if (!access || !user) {
+    async function loadUser() {
+      try {
+        const response = await apiFetch(
+          "/api/v1/auth/me/",
+        );
+
+        if (!response.ok) {
+          clearSession();
+          router.replace("/");
+          return;
+        }
+
+        const data =
+          (await response.json()) as NexusUser;
+
+        if (active) {
+          setUser(data);
+          setLoading(false);
+        }
+      } catch {
+        clearSession();
+
+        router.replace("/");
+      }
+    }
+
+    void loadUser();
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+
+    await logout();
+
+    router.replace("/");
+    router.refresh();
+  }
+
+  if (loading) {
+    return (
+      <main className="dashboard-loading">
+        <span>NXS</span>
+        <p>Carregando ambiente acadêmico...</p>
+      </main>
+    );
+  }
+
+  if (!user) {
     return null;
   }
 
@@ -70,44 +103,41 @@ export default function Dashboard() {
     user.email;
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        padding: "48px",
-        background: "#f2efe7",
-        color: "#151a22",
-      }}
-    >
-      <p
-        style={{
-          fontSize: "10px",
-          letterSpacing: ".16em",
-          fontWeight: 800,
-          color: "#68717c",
-        }}
-      >
-        NEXUS ACADEMY / SESSÃO
-      </p>
+    <main className="dashboard-test">
+      <header>
+        <div>
+          <span className="dashboard-eyebrow">
+            NEXUS ACADEMY / SESSÃO
+          </span>
 
-      <h1
-        style={{
-          marginTop: "60px",
-          fontFamily:
-            "var(--font-serif), serif",
-          fontSize: "64px",
-          fontWeight: 400,
-        }}
-      >
-        Olá, {name}.
-      </h1>
+          <h1>
+            Olá, {name}.
+          </h1>
 
-      <p>
-        Seu login foi realizado com sucesso.
-      </p>
+          <p>
+            Sua sessão está autenticada e
+            protegida pelo Nexus.
+          </p>
+        </div>
 
-      <p>
-        Perfil: <strong>{user.role}</strong>
-      </p>
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={loggingOut}
+        >
+          {loggingOut
+            ? "Saindo..."
+            : "Encerrar sessão"}
+        </button>
+      </header>
+
+      <section>
+        <span>PERFIL ATUAL</span>
+
+        <strong>{user.role}</strong>
+
+        <p>{user.email}</p>
+      </section>
     </main>
   );
 }
