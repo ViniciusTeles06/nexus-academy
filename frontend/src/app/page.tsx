@@ -425,22 +425,21 @@ export default function Home() {
                 Validando com Google...
               </button>
             ) : (
-              <GoogleLogin
-                onSuccess={
-                  handleGoogleLogin
-                }
-                onError={() =>
-                  setError(
-                    "Não foi possível iniciar o login com Google.",
-                  )
-                }
-                theme="outline"
-                size="large"
-                text="continue_with"
-                shape="rectangular"
-                logo_alignment="left"
-                width="400"
-              />
+            <GoogleLogin
+            onSuccess={handleGoogleLogin}
+            onError={() =>
+            setError(
+          "Não foi possível iniciar o login com Google.",
+          )
+        }
+          theme="outline"
+          size="large"
+          text="continue_with"
+          shape="rectangular"
+          logo_alignment="left"
+          width="400"
+          use_fedcm_for_button={true}
+          />
             )}
           </div>
 
