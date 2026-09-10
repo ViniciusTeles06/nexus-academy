@@ -10,23 +10,24 @@ import { useRouter } from "next/navigation";
 
 import {
   apiFetch,
+  bootstrapInstitution,
   clearSession,
   logout,
+  type Membership,
 } from "@/lib/api";
+
 
 type NexusUser = {
   id: string;
   email: string;
   first_name: string;
   last_name: string;
-  full_name: string;
-  role:
-    | "STUDENT"
-    | "TEACHER"
-    | "ADMIN";
-  avatar: string | null;
+  full_name?: string;
+  avatar?: string | null;
+  role: string;
   is_email_verified: boolean;
 };
+
 
 type NavIconName =
   | "home"
@@ -35,52 +36,63 @@ type NavIconName =
   | "attendance"
   | "agenda";
 
-const navItems: {
+
+type NavItem = {
   id: string;
-  label: string;
   number: string;
+  label: string;
   icon: NavIconName;
-}[] = [
+};
+
+
+const navItems: NavItem[] = [
   {
     id: "overview",
-    label: "Início",
     number: "01",
+    label: "Visão geral",
     icon: "home",
   },
   {
     id: "subjects",
-    label: "Disciplinas",
     number: "02",
+    label: "Disciplinas",
     icon: "subjects",
   },
   {
     id: "grades",
-    label: "Notas",
     number: "03",
+    label: "Notas",
     icon: "grades",
   },
   {
     id: "attendance",
-    label: "Frequência",
     number: "04",
+    label: "Frequência",
     icon: "attendance",
   },
   {
     id: "agenda",
-    label: "Agenda",
     number: "05",
+    label: "Agenda",
     icon: "agenda",
   },
 ];
 
+
 function getGreeting() {
   const hour = new Date().getHours();
 
-  if (hour < 12) return "Bom dia";
-  if (hour < 18) return "Boa tarde";
+  if (hour < 12) {
+    return "Bom dia";
+  }
+
+  if (hour < 18) {
+    return "Boa tarde";
+  }
 
   return "Boa noite";
 }
+
 
 function getCurrentDate() {
   const date = new Date();
@@ -118,6 +130,31 @@ function getCurrentDate() {
     weekday,
   };
 }
+
+
+function getRoleLabel(
+  membership: Membership | null,
+) {
+  if (!membership) {
+    return "Aluno";
+  }
+
+  switch (membership.role) {
+    case "OWNER":
+      return "Proprietário";
+
+    case "ADMIN":
+      return "Administrador";
+
+    case "TEACHER":
+      return "Professor";
+
+    case "STUDENT":
+    default:
+      return "Aluno";
+  }
+}
+
 
 function NavIcon({
   name,
@@ -200,79 +237,259 @@ function NavIcon({
   );
 }
 
+
 export default function Dashboard() {
   const router = useRouter();
 
   const [user, setUser] =
-    useState<NexusUser | null>(null);
+    useState<NexusUser | null>(
+      null,
+    );
+
+  const [
+    activeMembership,
+    setActiveMembership,
+  ] =
+    useState<Membership | null>(
+      null,
+    );
+
+  const [
+    institutionError,
+    setInstitutionError,
+  ] =
+    useState<string | null>(
+      null,
+    );
 
   const [loading, setLoading] =
     useState(true);
 
-  const [loggingOut, setLoggingOut] =
+  const [
+    loggingOut,
+    setLoggingOut,
+  ] =
     useState(false);
 
-  const [activeIndex, setActiveIndex] =
+  const [
+    activeIndex,
+    setActiveIndex,
+  ] =
     useState(0);
 
+
   /*
-    Evita que o IntersectionObserver
-    dispute o controle da navegação
-    durante um clique.
+    Impede o IntersectionObserver
+    de disputar o índice enquanto
+    uma navegação por clique acontece.
   */
   const navigationLock =
     useRef(false);
 
   const navigationTimer =
-    useRef<ReturnType<
-      typeof setTimeout
-    > | null>(null);
+    useRef<
+      ReturnType<
+        typeof setTimeout
+      > | null
+    >(null);
 
-  const date = getCurrentDate();
+
+  const date =
+    getCurrentDate();
 
   /*
     Depois isso virá da API.
   */
-  const hasAgendaNotice = false;
+  const hasAgendaNotice =
+    false;
 
+
+  /*
+    Carrega:
+
+    1. Usuário autenticado
+    2. Memberships
+    3. Instituição ativa
+    4. Validação do contexto atual
+  */
   useEffect(() => {
     let active = true;
 
-    async function loadUser() {
+    async function loadDashboard() {
       try {
-        const response =
+        /*
+          Confirma a autenticação.
+        */
+        const userResponse =
           await apiFetch(
             "/api/v1/auth/me/",
           );
 
-        if (!response.ok) {
+        if (
+          !userResponse.ok
+        ) {
           clearSession();
 
-          router.replace("/");
+          router.replace(
+            "/",
+          );
 
           return;
         }
 
-        const data =
-          (await response.json()) as NexusUser;
+        const userData =
+          (await userResponse.json()) as NexusUser;
 
-        if (active) {
-          setUser(data);
-          setLoading(false);
+        if (!active) {
+          return;
         }
-      } catch {
-        clearSession();
 
-        router.replace("/");
+        setUser(
+          userData,
+        );
+
+
+        /*
+          Descobre as instituições
+          deste usuário.
+        */
+        const institutionState =
+          await bootstrapInstitution();
+
+        if (!active) {
+          return;
+        }
+
+
+        /*
+          Nenhuma instituição.
+        */
+        if (
+          institutionState
+            .memberships
+            .length === 0
+        ) {
+          setInstitutionError(
+            "Sua conta ainda não está vinculada a uma instituição.",
+          );
+
+          setLoading(
+            false,
+          );
+
+          return;
+        }
+
+
+        /*
+          Mais de uma instituição.
+
+          Depois criaremos a tela
+          de seleção.
+        */
+        if (
+          institutionState
+            .requiresSelection
+        ) {
+          setInstitutionError(
+            "Selecione uma instituição para continuar.",
+          );
+
+          setLoading(
+            false,
+          );
+
+          return;
+        }
+
+
+        const membership =
+          institutionState
+            .activeMembership;
+
+        if (!membership) {
+          setInstitutionError(
+            "Não foi possível definir a instituição ativa.",
+          );
+
+          setLoading(
+            false,
+          );
+
+          return;
+        }
+
+
+        /*
+          bootstrapInstitution()
+          já salvou o ID da
+          instituição.
+
+          Portanto apiFetch agora
+          envia automaticamente:
+
+          X-Institution-ID: UUID
+        */
+        const currentResponse =
+          await apiFetch(
+            "/api/v1/institutions/current/",
+          );
+
+        if (
+          !currentResponse.ok
+        ) {
+          setInstitutionError(
+            "Não foi possível validar seu acesso à instituição.",
+          );
+
+          setLoading(
+            false,
+          );
+
+          return;
+        }
+
+
+        const currentMembership =
+          (await currentResponse.json()) as Membership;
+
+        if (!active) {
+          return;
+        }
+
+        setActiveMembership(
+          currentMembership,
+        );
+
+        setInstitutionError(
+          null,
+        );
+
+        setLoading(
+          false,
+        );
+      } catch {
+        if (!active) {
+          return;
+        }
+
+        setInstitutionError(
+          "Não foi possível carregar seu ambiente acadêmico.",
+        );
+
+        setLoading(
+          false,
+        );
       }
     }
 
-    void loadUser();
+    void loadDashboard();
 
     return () => {
       active = false;
     };
   }, [router]);
+
 
   /*
     Observer da seção visível.
@@ -285,7 +502,9 @@ export default function Dashboard() {
     então não há disputa pelo activeIndex.
   */
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
 
     const sections =
       navItems
@@ -334,7 +553,9 @@ export default function Dashboard() {
             );
 
           if (index >= 0) {
-            setActiveIndex(index);
+            setActiveIndex(
+              index,
+            );
           }
         },
         {
@@ -352,7 +573,9 @@ export default function Dashboard() {
 
     sections.forEach(
       (section) => {
-        observer.observe(section);
+        observer.observe(
+          section,
+        );
       },
     );
 
@@ -360,6 +583,7 @@ export default function Dashboard() {
       observer.disconnect();
     };
   }, [user]);
+
 
   /*
     Limpa qualquer timer se
@@ -377,10 +601,12 @@ export default function Dashboard() {
     };
   }, []);
 
+
   function navigateTo(
     index: number,
   ) {
-    navigationLock.current = true;
+    navigationLock.current =
+      true;
 
     if (
       navigationTimer.current
@@ -390,7 +616,9 @@ export default function Dashboard() {
       );
     }
 
-    setActiveIndex(index);
+    setActiveIndex(
+      index,
+    );
 
     const section =
       document.getElementById(
@@ -403,23 +631,33 @@ export default function Dashboard() {
     });
 
     navigationTimer.current =
-      setTimeout(() => {
-        navigationLock.current =
-          false;
+      setTimeout(
+        () => {
+          navigationLock.current =
+            false;
 
-        navigationTimer.current =
-          null;
-      }, 900);
+          navigationTimer.current =
+            null;
+        },
+        900,
+      );
   }
 
+
   async function handleLogout() {
-    setLoggingOut(true);
+    setLoggingOut(
+      true,
+    );
 
     await logout();
 
-    router.replace("/");
+    router.replace(
+      "/",
+    );
+
     router.refresh();
   }
+
 
   if (loading) {
     return (
@@ -440,20 +678,53 @@ export default function Dashboard() {
     );
   }
 
+
+  if (
+    institutionError
+  ) {
+    return (
+      <main className="nexus-loading">
+        <div className="nexus-loading-mark">
+          N
+        </div>
+
+        <p>
+          {institutionError}
+        </p>
+      </main>
+    );
+  }
+
+
   if (!user) {
     return null;
   }
 
+
   const name =
     user.first_name ||
     user.full_name ||
-    user.email.split("@")[0];
+    user.email.split(
+      "@",
+    )[0];
+
 
   const initials =
-    `${user.first_name?.[0] ?? ""}${
-      user.last_name?.[0] ?? ""
+    `${
+      user.first_name?.[0] ??
+      ""
+    }${
+      user.last_name?.[0] ??
+      ""
     }` ||
     user.email[0].toUpperCase();
+
+
+  const roleLabel =
+    getRoleLabel(
+      activeMembership,
+    );
+
 
   return (
     <main className="student-dashboard">
@@ -473,6 +744,7 @@ export default function Dashboard() {
             </span>
           </div>
         </div>
+
 
         <div className="nexus-nav-wrapper">
           <span className="nexus-nav-label">
@@ -500,7 +772,9 @@ export default function Dashboard() {
                 index,
               ) => (
                 <button
-                  key={item.id}
+                  key={
+                    item.id
+                  }
                   type="button"
                   className={
                     activeIndex ===
@@ -545,6 +819,7 @@ export default function Dashboard() {
           </nav>
         </div>
 
+
         <div className="nexus-sidebar-account">
           <button
             type="button"
@@ -572,10 +847,11 @@ export default function Dashboard() {
               </strong>
 
               <span>
-                Aluno
+                {roleLabel}
               </span>
             </div>
           </button>
+
 
           <button
             type="button"
@@ -594,27 +870,41 @@ export default function Dashboard() {
         </div>
       </aside>
 
+
       <section className="nexus-dashboard-main">
         <header className="nexus-topbar">
           <span>
-            NXS / PORTAL ACADÊMICO
+            NXS /{" "}
+            {activeMembership
+              ? activeMembership
+                  .institution
+                  .name
+                  .toUpperCase()
+              : "PORTAL ACADÊMICO"}
           </span>
 
           <div>
             <span>
               CONTA{" "}
-              {user.is_email_verified
-                ? "VERIFICADA"
-                : "NÃO VERIFICADA"}
+              {
+                user.is_email_verified
+                  ? "VERIFICADA"
+                  : "NÃO VERIFICADA"
+              }
             </span>
 
             <i />
 
             <span>
-              {user.role}
+              {
+                activeMembership
+                  ?.role ??
+                user.role
+              }
             </span>
           </div>
         </header>
+
 
         <div className="nexus-dashboard-content">
           <section
@@ -650,6 +940,7 @@ export default function Dashboard() {
               </p>
             </div>
 
+
             <aside className="today-panel">
               <div className="today-header">
                 <span>
@@ -660,6 +951,7 @@ export default function Dashboard() {
                   NXS / 01
                 </span>
               </div>
+
 
               <div className="today-date">
                 <strong
@@ -672,7 +964,9 @@ export default function Dashboard() {
                   <span
                     suppressHydrationWarning
                   >
-                    {date.month}
+                    {
+                      date.month
+                    }
                   </span>
 
                   <p
@@ -684,6 +978,7 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
+
 
               <div className="today-status">
                 <span />
@@ -705,6 +1000,7 @@ export default function Dashboard() {
               </div>
             </aside>
           </section>
+
 
           <section className="period-strip">
             <article>
@@ -729,6 +1025,7 @@ export default function Dashboard() {
               </p>
             </article>
 
+
             <article>
               <span className="period-index">
                 02
@@ -748,6 +1045,7 @@ export default function Dashboard() {
                 da matrícula.
               </p>
             </article>
+
 
             <article>
               <span className="period-index">
@@ -771,6 +1069,7 @@ export default function Dashboard() {
             </article>
           </section>
 
+
           <section
             className="live-section"
             id="subjects"
@@ -793,6 +1092,7 @@ export default function Dashboard() {
                 atual.
               </p>
             </header>
+
 
             <div className="subjects-empty">
               <div className="empty-visual">
@@ -831,6 +1131,7 @@ export default function Dashboard() {
             </div>
           </section>
 
+
           <section
             className="live-section"
             id="grades"
@@ -854,6 +1155,7 @@ export default function Dashboard() {
               </p>
             </header>
 
+
             <div className="grade-layout">
               <article className="grade-main">
                 <span>
@@ -872,6 +1174,7 @@ export default function Dashboard() {
                   registradas.
                 </p>
               </article>
+
 
               <article className="grade-secondary">
                 <div>
@@ -892,6 +1195,7 @@ export default function Dashboard() {
               </article>
             </div>
           </section>
+
 
           <section
             className="live-section"
@@ -915,6 +1219,7 @@ export default function Dashboard() {
                 do semestre.
               </p>
             </header>
+
 
             <div className="attendance-layout">
               <div className="attendance-big">
@@ -957,6 +1262,7 @@ export default function Dashboard() {
             </div>
           </section>
 
+
           <section
             className="live-section"
             id="agenda"
@@ -980,18 +1286,23 @@ export default function Dashboard() {
               </p>
             </header>
 
+
             <div className="agenda-empty">
               <div className="agenda-date-mark">
                 <span
                   suppressHydrationWarning
                 >
-                  {date.month}
+                  {
+                    date.month
+                  }
                 </span>
 
                 <strong
                   suppressHydrationWarning
                 >
-                  {date.day}
+                  {
+                    date.day
+                  }
                 </strong>
               </div>
 
@@ -1020,6 +1331,7 @@ export default function Dashboard() {
           </section>
         </div>
 
+
         <footer className="nexus-dashboard-footer">
           <span>
             © 2026 NEXUS
@@ -1032,6 +1344,7 @@ export default function Dashboard() {
           </span>
         </footer>
       </section>
+
 
       <nav className="nexus-mobile-dock">
         <span
@@ -1054,7 +1367,9 @@ export default function Dashboard() {
             index,
           ) => (
             <button
-              key={item.id}
+              key={
+                item.id
+              }
               type="button"
               className={
                 activeIndex ===
@@ -1083,7 +1398,9 @@ export default function Dashboard() {
               </span>
 
               <span>
-                {item.label}
+                {
+                  item.label
+                }
               </span>
             </button>
           ),
