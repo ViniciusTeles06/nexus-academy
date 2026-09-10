@@ -4,6 +4,7 @@ from pathlib import Path
 
 import dj_database_url
 import environ
+from corsheaders.defaults import default_headers
 
 
 # =========================================================
@@ -357,6 +358,11 @@ CORS_ALLOWED_ORIGINS = env.list(
 )
 
 CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_HEADERS = [
+    *default_headers,
+    "x-institution-id",
+]
 
 
 # =========================================================
