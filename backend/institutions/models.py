@@ -62,6 +62,7 @@ class Membership(TimeStampedModel):
     class Role(models.TextChoices):
         OWNER = "OWNER", "Proprietário"
         ADMIN = "ADMIN", "Administrador"
+        COORDINATOR = "COORDINATOR", "Coordenador"
         TEACHER = "TEACHER", "Professor"
         STUDENT = "STUDENT", "Aluno"
 
